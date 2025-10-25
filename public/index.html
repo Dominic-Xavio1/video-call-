@@ -1,18 +1,14 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Simple WebRTC Call</title>
-    <style>
-      video { width: 45%; margin: 10px; border: 2px solid green; border-radius: 8px; }
-    </style>
+    <title>WebRTC App</title>
   </head>
   <body>
-    <h2>Simple WebRTC Demo</h2>
-    <button id="startBtn">Start Call</button>
-    <video id="localVideo" autoplay muted></video>
+    <video id="localVideo" autoplay></video>
     <video id="remoteVideo" autoplay></video>
+    <button id="startButton">Start Call</button>
+    <button id="hangupButton">Hang Up</button>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
