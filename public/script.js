@@ -1,69 +1,120 @@
-const socket = io();
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
-const startBtn = document.getElementById("startBtn");
-
+// Initialize variables
 let localStream;
-let peerConnection;
+let remoteStream;
+let localPeerConnection;
+let remotePeerConnection;
 
-const servers = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-};
+// Get references to HTML elements
+const startButton = document.getElementById('startButton');
+const hangupButton = document.getElementById('hangupButton');
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
 
-startBtn.onclick = async () => {
-  console.log("I am clicked!",startBtn)
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  localVideo.srcObject = localStream;
+// Add event listeners
+startButton.addEventListener('click', startCall);
+hangupButton.addEventListener('click', hangupCall);
 
-  peerConnection = new RTCPeerConnection(servers);
+// Create the offer
+function startCall() {
+  startButton.disabled = true;
+  hangupButton.disabled = false;
 
-  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+  // Get local media stream
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(stream => {
+      localStream = stream;
+      localVideo.srcObject = stream;
 
-  peerConnection.ontrack = event => {
-    remoteVideo.srcObject = event.streams[0];
-  };
+      // Create local peer connection
+      localPeerConnection = new RTCPeerConnection();
 
-  peerConnection.onicecandidate = event => {
-    if (event.candidate) {
-      socket.emit("ice-candidate", event.candidate);
-    }
-  };
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  socket.emit("offer", offer);
-};
-socket.on("offer", async (offer) => {
-  if (!peerConnection) {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = localStream;
+      // Add local stream to connection
+      localStream.getTracks().forEach(track => {
+        localPeerConnection.addTrack(track, localStream);
+      });
 
-    peerConnection = new RTCPeerConnection(servers);
+      // Create offer
+      localPeerConnection.createOffer()
+        .then(offer => {
+          localPeerConnection.setLocalDescription(offer);
 
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+          // Send offer to signaling server
+          signal('offer', offer);
+        })
+        .catch(error => {
+          console.error('Error creating offer:', error);
+        });
 
-    peerConnection.ontrack = event => {
-      remoteVideo.srcObject = event.streams[0];
-    };
+      // Set up remote peer connection
+      remotePeerConnection = new RTCPeerConnection();
 
-    peerConnection.onicecandidate = event => {
-      if (event.candidate) {
-        socket.emit("ice-candidate", event.candidate);
-      }
-    };
-  }
+      // Add remote stream to connection
+      remotePeerConnection.ontrack = event => {
+        remoteStream = event.streams[0];
+        remoteVideo.srcObject = remoteStream;
+      };
 
-  await peerConnection.setRemoteDescription(offer);
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
-  socket.emit("answer", answer);
-});
-socket.on("answer", async (answer) => {
-  await peerConnection.setRemoteDescription(answer);
-});
-socket.on("ice-candidate", async (candidate) => {
-  try {
-    await peerConnection.addIceCandidate(candidate);
-  } catch (e) {
-    console.error("Error adding ICE candidate", e);
-  }
+      // Handle ice candidates for local peer connection
+      localPeerConnection.onicecandidate = event => {
+        if (event.candidate) {
+          // Send ice candidate to signaling server
+          signal('candidate', event.candidate);
+        }
+      };
+
+      // Handle incoming ice candidates for remote peer connection
+      fromSignal.on('ice-candidate', candidate => {
+        remotePeerConnection.addIceCandidate(candidate);
+      });
+
+      // Handle incoming offer from remote peer
+      fromSignal.on('offer', offer => {
+        remotePeerConnection.setRemoteDescription(offer);
+
+        // Create answer
+        remotePeerConnection.createAnswer()
+          .then(answer => {
+            remotePeerConnection.setLocalDescription(answer);
+
+            // Send answer to signaling server
+            signal('answer', answer);
+          })
+          .catch(error => {
+            console.error('Error creating answer:', error);
+          });
+      });
+
+      // Handle incoming answer from remote peer
+      fromSignal.on('answer', answer => {
+        localPeerConnection.setRemoteDescription(answer);
+      });
+    })
+    .catch(error => {
+      console.error('Error accessing media devices:', error);
+    });
+}
+
+// Hang up the call
+function hangupCall() {
+  localPeerConnection.close();
+  remotePeerConnection.close();
+  localPeerConnection = null;
+  remotePeerConnection = null;
+  startButton.disabled = false;
+  hangupButton.disabled = true;
+  localVideo.srcObject = null;
+  remoteVideo.srcObject = null;
+
+  // Send hang up signal to signaling server
+  signal('end','hang-up');
+}
+
+// Function for sending data to signaling server
+function signal(eventName, data) {
+  // Your implementation for sending data to the signaling server
+}
+
+// Event listener for other incoming data from signaling server
+fromSignal.on('data', data => {
+  // Your implementation for handling incoming data from the signaling server
 });
