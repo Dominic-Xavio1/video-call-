@@ -18,7 +18,7 @@ hangupButton.addEventListener('click', hangupCall);
 function startCall() {
   startButton.disabled = true;
   hangupButton.disabled = false;
-
+console.log("I am clicked!")
   // Get local media stream
   navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     .then(stream => {
